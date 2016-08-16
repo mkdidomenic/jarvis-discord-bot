@@ -104,7 +104,7 @@ def on_message(message):
             replyString += "\n-stations - lists the saved stations"
 
         #quit the stuff
-        elif command == ('$quit'):
+        elif command == ('$quit') and message.author.name == "mike":
             shouldReply = False
             yield from client.send_message(message.channel, 'Goodbye.')
             yield from client.logout()
