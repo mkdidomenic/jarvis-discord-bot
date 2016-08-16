@@ -7,10 +7,12 @@ import csv
 from texter import sendSMSMessage
 import ytsearcher
 import getTop100
+import overpwn_news
 
 
 songCSVpath = "dragonsongs.csv"
 addressCSVpath = "addressbook.csv"
+news_channel_name = "news"
 
 discord_username = "dragonitecatcher5556@gmail.com"
 discord_password = "dratini17"
@@ -59,6 +61,38 @@ def playYoutubeURL(yturl):
     else:
         replyString = "I am not connected to a voice channel."
     return replyString
+
+@asyncio.coroutine
+def update_news(message):
+    global news_channel_name
+    for channel in message.server.channels:
+        if channel.name == news_channel_name:
+            news_string = overpwn_news.get_news()
+            yield from send_discord(channel, news_string)
+
+def split_message(message, limit):
+    '''keeps the message below discords limit'''
+    if len(message) < limit:
+        return [message]
+    else:
+        message1 = message[:int(len(message) / 2)]
+        message2 = message[int(len(message) / 2):]
+        message1 = split_message(message1, limit)
+        message2 = split_message(message2, limit)
+        return message1 + message2
+
+
+@asyncio.coroutine
+def send_discord(channel, message):
+    '''sends the message splitting it if need be'''
+    character_limit = 2000
+    if len(message) < character_limit:
+        yield from client.send_message(channel, message)
+    else:
+        messages = split_message(message, character_limit)
+        for message in messages:
+            yield from client.send_message(channel, message)
+
 
 @client.event
 @asyncio.coroutine
@@ -348,6 +382,11 @@ def on_message(message):
                 else:
                     replyString = "No voice channel"
 
+        # updates news
+        elif command == "$updatenews":
+            shouldReply = False
+            yield from update_news(message)
+
 
         # texting
         elif command == ("$text"):
@@ -388,14 +427,7 @@ def on_message(message):
             replyString = "\"" + command + "\" is not a command."
 
         if shouldReply:
-            character_limit = 2000
-            if len(replyString) > character_limit:
-                replyString1 = replyString[:character_limit]
-                replyString2 = replyString[character_limit:]
-                yield from client.send_message(message.channel, replyString1)
-                yield from client.send_message(message.channel, replyString2)
-            else:
-                yield from client.send_message(message.channel, replyString)
+            yield from send_discord(message.channel, replyString)
 
 
 
@@ -421,10 +453,10 @@ def on_message(message):
 
 
 
-
+@asyncio.coroutine
 def setup():
     print("setupping")
-            
+
 @client.event
 @asyncio.coroutine
 def on_member_join(member):
@@ -444,9 +476,10 @@ def on_ready():
 
 @asyncio.coroutine
 def main():
+    yield from setup()
     yield from client.login(discord_token)
     yield from client.connect()
-    setup()
+
 
 
 if __name__ == '__main__':
