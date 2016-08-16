@@ -14,6 +14,8 @@ addressCSVpath = "addressbook.csv"
 
 discord_username = "dragonitecatcher5556@gmail.com"
 discord_password = "dratini17"
+discord_token = "MjE0ODg5NzE2NzMzMDUwODgx.CpPjMw\
+.ZdFLRcXEGA2ILghHvqJ5HVU7U0I"
 
 YTSTRING = "https://www.youtube.com/watch?v="
 
@@ -418,6 +420,11 @@ def on_message(message):
             yield from client.send_message(message.channel, respString)
 
 
+
+
+def setup():
+    print("setupping")
+            
 @client.event
 @asyncio.coroutine
 def on_member_join(member):
@@ -437,8 +444,9 @@ def on_ready():
 
 @asyncio.coroutine
 def main():
-    yield from client.login(discord_username, discord_password)
+    yield from client.login(discord_token)
     yield from client.connect()
+    setup()
 
 
 if __name__ == '__main__':
