@@ -63,7 +63,8 @@ def playYoutubeURL(yturl):
             ptitle = ytsearcher.get_html_page_title(complete_url)
             replyString += "\nJammin' to " + ptitle
     else:
-        replyString = "I am not connected to a voice channel."
+        replyString = "I am not connected to a voice channel.\n"
+        replyString += "Use $join [voice channel name]."
     return replyString
 
 @asyncio.coroutine
