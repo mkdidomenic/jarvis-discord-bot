@@ -8,6 +8,7 @@ from texter import sendSMSMessage
 import ytsearcher
 import getTop100
 import overpwn_news
+import time
 
 
 songCSVpath = "dragonsongs.csv"
@@ -25,6 +26,9 @@ client = discord.Client()
 voice = None
 player = None
 station = "hot-100"
+
+last_update_time = 0
+time_between_updates = 12 * (60 * 60)
 
 default_volume = 15 / 100
 
@@ -65,9 +69,13 @@ def playYoutubeURL(yturl):
 @asyncio.coroutine
 def update_news(message):
     global news_channel_name
+    global last_update_time
+
     for channel in message.server.channels:
         if channel.name == news_channel_name:
             news_string = overpwn_news.get_news()
+            last_update_time = time.time()
+            print("Updated news - update time: " + str(last_update_time))
             yield from send_discord(channel, news_string)
 
 def split_message(message, limit):
@@ -100,6 +108,8 @@ def on_message(message):
     global player
     global voice
     global station
+    global time_between_updates
+    global last_update_time
     #check if its a command
     if message.content.startswith("$"):
         # get the command and message
@@ -450,6 +460,9 @@ def on_message(message):
             yield from client.delete_message(message)
             respString = "That's not nice, " + message.author.name + "."
             yield from client.send_message(message.channel, respString)
+
+    if (time.time() - last_update_time) > time_between_updates:
+        yield from update_news(message)
 
 
 
