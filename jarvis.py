@@ -20,6 +20,8 @@ discord_password = "dratini17"
 discord_token = "MjE0ODg5NzE2NzMzMDUwODgx.CpPjMw\
 .ZdFLRcXEGA2ILghHvqJ5HVU7U0I"
 
+admins = ['mike']
+
 YTSTRING = "https://www.youtube.com/watch?v="
 
 client = discord.Client()
@@ -149,7 +151,7 @@ def on_message(message):
             replyString += "\n-stations - lists the saved stations"
 
         #quit the stuff
-        elif command == ('$quit') and message.author.name == "mike":
+        elif command == ('$quit') and message.author.name in admins:
             shouldReply = False
             yield from client.send_message(message.channel, 'Goodbye.')
             yield from client.logout()
@@ -182,7 +184,7 @@ def on_message(message):
                 yield from client.accept_invite(inv)
                 replyString = "Joining " + target
 
-        elif command == ("$leave"):
+        elif command == ("$leave") and message.author.name in admins:
             if len(words) < 2:
                 target = message.server.name
             else:
