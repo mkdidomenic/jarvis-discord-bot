@@ -9,6 +9,7 @@ import ytsearcher
 import getTop100
 import overpwn_news
 import time
+import random
 
 
 songCSVpath = "dragonsongs.csv"
@@ -34,12 +35,27 @@ time_between_updates = 12 * (60 * 60)
 
 default_volume = 22 / 100
 
+hangmaning = False
+hangman_word = ""
+guesses = ""
+tries_left = 0
+hangman_guessed_chars = ""
+hangman_blank_char = "="
+
 def wordArrayToString(words):
     string = ""
     for word in words:
         string += str(word) + " "
     string = string[:-1]
     return string
+
+def spaces_between_letters(string):
+    new_string = ""
+    for i in range(len(string)):
+        new_string += string[i]
+        new_string += " "
+    new_string = new_string[:-1]
+    return new_string
 
 
 def playYoutubeURL(yturl):
@@ -68,6 +84,17 @@ def playYoutubeURL(yturl):
         replyString = "I am not connected to a voice channel.\n"
         replyString += "Use $join [voice channel name]."
     return replyString
+
+def get_hangman_word():
+    '''chooses a random word from the words file'''
+    wordfilename = "words.txt"
+    f = open(wordfilename)
+    read = csv.reader(f)
+    file_data = []
+    for row in read:
+        file_data += row
+    word = random.choice(file_data)
+    return word
 
 @asyncio.coroutine
 def update_news(message):
@@ -113,6 +140,12 @@ def on_message(message):
     global station
     global time_between_updates
     global last_update_time
+    global hangmaning
+    global hangman_word
+    global guesses
+    global tries_left
+    global hangman_blank_char
+    global hangman_guessed_chars
     #check if its a command
     if message.content.startswith("$"):
         # get the command and message
@@ -153,6 +186,7 @@ def on_message(message):
         #quit the stuff
         elif command == ('$quit') and message.author.name in admins:
             shouldReply = False
+            hangmaning = False
             yield from client.send_message(message.channel, 'Goodbye.')
             yield from client.logout()
 
@@ -434,6 +468,20 @@ def on_message(message):
                 string += row[0] + ": " + row[1] + "\n"
             replyString = string
 
+        # just for playing games
+        elif command == ("$hangman"):
+            if hangmaning:
+                hangmaning = False
+                replyString = "Stopping the game of hangman."
+            else:
+                hangmaning = True
+                hangman_word = get_hangman_word()
+                guesses = hangman_blank_char * len(hangman_word)
+                tries_left = 7
+                hangman_guessed_chars = ""
+                replyString = "Starting hangman! You have " + str(tries_left) + " tries."
+
+
 
         # not one of the above commands
         else:
@@ -463,6 +511,75 @@ def on_message(message):
             yield from client.delete_message(message)
             respString = "That's not nice, " + message.author.name + "."
             yield from client.send_message(message.channel, respString)
+
+    elif hangmaning:
+        # playing hangman
+        m = message.content
+        words = m.split(" ")
+        if len(words) == 1:# 1 word guess, other wise dont mess
+            guess_w = words[0]
+            if len(guess_w) > 1:
+                if guess_w == hangman_word:
+                    # win
+                    hangmaning = False
+                    string = "You win! The word was " + hangman_word + "."
+                    yield from client.send_message(message.channel, string)
+                else:
+                    tries_left -= 1
+                    if tries_left == 0:
+                        # loss
+                        hangmaning = False
+                        string = "Game over! The word was " + hangman_word + "."
+                        yield from client.send_message(message.channel, string)
+                    else:
+                        string = "Sorry, the word was not " + guess_w + "." + "\n"
+                        string += "Word: " + spaces_between_letters(guesses) + "\n"
+                        string += "Guessed: " + spaces_between_letters(hangman_guessed_chars) + "\n"
+                        string += "You have " + str(tries_left) + " tries left."
+                        yield from client.send_message(message.channel, string)
+            else: # guessing a character
+                if guess_w in hangman_guessed_chars:
+                    string = "You have already guessed " + guess_w + "."
+                    yield from client.send_message(message.channel, string)
+                else:
+                    hangman_guessed_chars += guess_w
+                    foundchar = False
+                    #
+                    new_guesses = ""
+                    for i in range(len(hangman_word)):
+                        if guess_w == hangman_word[i]:
+                            new_guesses += hangman_word[i]
+                            foundchar = True
+                        else:
+                            new_guesses += guesses[i]
+                    guesses = new_guesses
+                    #
+                    if foundchar:
+                        if hangman_blank_char not in guesses:
+                            # win
+                            hangmaning = False
+                            string = "You win! The word was " + hangman_word + "."
+                            yield from client.send_message(message.channel, string)
+                        else:
+                            string = "Great work! \n"
+                            string += "Word: " + spaces_between_letters(guesses) + "\n"
+                            string += "Guessed: " + spaces_between_letters(hangman_guessed_chars) + "\n"
+                            string += "You have " + str(tries_left) + " tries left."
+                            yield from client.send_message(message.channel, string)
+                    else:
+                        tries_left -= 1
+                        if tries_left == 0:
+                            # loss
+                            hangmaning = False
+                            string = "Game over! The word was " + hangman_word + "."
+                            yield from client.send_message(message.channel, string)
+                        else:
+                            string = "Sorry, " + guess_w + " was not in the word." + "\n"
+                            string += "Word: " + spaces_between_letters(guesses) + "\n"
+                            string += "Guessed: " + spaces_between_letters(hangman_guessed_chars) + "\n"
+                            string += "You have " + str(tries_left) + " tries left."
+                            yield from client.send_message(message.channel, string)
+
 
     if (time.time() - last_update_time) > time_between_updates:
         yield from update_news(message)
