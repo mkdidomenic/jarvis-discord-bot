@@ -34,6 +34,16 @@ def remove_end_spaces(string):
     else:
         return remove_end_spaces(string[:-1])
 
+def filter_for_playlist(url_end):
+    new_url_end = ""
+    for char in url_end:
+        if char == "&":
+            break
+        else:
+            new_url_end += char
+    return new_url_end
+
+
 
 def spaces_to_pluses(string):
     string = remove_end_spaces(string)
@@ -72,6 +82,7 @@ def main(search_query):
             foundURL = True
 
     #print(url_end)
+    url_end = filter_for_playlist(url_end)
     return url_end
 
 

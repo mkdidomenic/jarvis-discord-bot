@@ -33,7 +33,7 @@ station = "hot-100"
 last_update_time = 0
 time_between_updates = 12 * (60 * 60)
 
-default_volume = 22 / 100
+default_volume = 8 / 100
 
 hangmaning = False
 hangman_word = ""
