@@ -10,6 +10,8 @@ import getTop100
 import overpwn_news
 import time
 import random
+import threading
+
 
 
 songCSVpath = "dragonsongs.csv"
@@ -35,12 +37,18 @@ time_between_updates = 12 * (60 * 60)
 
 default_volume = 8 / 100
 
+ytr_m_channel = 'general'
+
 hangmaning = False
 hangman_word = ""
 guesses = ""
 tries_left = 0
 hangman_guessed_chars = ""
 hangman_blank_char = "="
+
+ytring = False
+current_ytr_url = ''
+ytrloop = None
 
 def wordArrayToString(words):
     string = ""
@@ -56,6 +64,14 @@ def spaces_between_letters(string):
         new_string += " "
     new_string = new_string[:-1]
     return new_string
+
+def parse_yturl_end(yturl):
+    if YTSTRING not in yturl:
+        return yturl
+    else:
+        for i in range(len(yturl)):
+            if yturl[i] == '=':
+                return yturl[i + 1:]
 
 
 def playYoutubeURL(yturl):
@@ -132,6 +148,31 @@ def send_discord(channel, message):
             yield from client.send_message(channel, message)
 
 
+@asyncio.coroutine
+async def yt_radio():#m_channel):
+    # threaded function
+    global player
+    global ytring
+    global current_ytr_url
+    global ytr_m_channel
+    m_channel = ytr_m_channel
+
+    #print('starting thread')
+
+    # init
+    if ytring:
+        rs = yield from playYoutubeURL(current_ytr_url)
+        yield from send_discord(m_channel, rs)
+    #loop
+    while ytring:
+        print('ytring:' + str(ytring))
+        if player != None and (not player.is_playing()):
+            current_ytr_url = ytsearcher.getUpNext(current_ytr_url)
+            rs = yield from playYoutubeURL(current_ytr_url)
+            yield from send_discord(m_channel, rs)
+    return
+
+
 @client.event
 @asyncio.coroutine
 def on_message(message):
@@ -146,7 +187,18 @@ def on_message(message):
     global tries_left
     global hangman_blank_char
     global hangman_guessed_chars
+    global current_ytr_url
+    global ytring
+    global ytrloop
+    global ytr_m_channel
     #check if its a command
+    if False:
+        print(time.time())
+        print('ytring: ' + str(ytring))
+        if ytrloop != None: print('ytrloop: ' + str(ytrloop.is_alive()))
+        if player != None: print('player: ' + str(player.is_playing()))
+        print()
+
     if message.content.startswith("$"):
         # get the command and message
         m = message.content
@@ -376,6 +428,25 @@ def on_message(message):
             replyString = "Search terms: " + arg_string + "\n\n"
             replyString += yield from playYoutubeURL(url_end)
 
+        elif command == ("$ytr"):
+            if ytring:
+                replyString = "Stopping radioing" + "\n\n"
+                ytring = False
+            else:
+                ytring = True
+                args = words[1:]
+                if len(args) < 1:
+                    respString = "provide search terms"
+                else:
+                    arg_string = wordArrayToString(args)
+                    url_end = ytsearcher.main(arg_string)
+                    current_ytr_url = url_end
+                    replyString = "Radioing with search terms: " + arg_string + "\n\n"
+                    #ytrloop = threading.Thread(target=yt_radio, args=(message.channel,))
+                    ytr_m_channel = message.channel
+                    asyncio.ensure_future(yt_radio())
+                    #print('bout to start thread')
+
         # play a song from the top 100 using search
         elif command == ("$dj"):
             sURL = getTop100.url_start() + station
@@ -581,8 +652,8 @@ def on_message(message):
                             yield from client.send_message(message.channel, string)
 
 
-    if (time.time() - last_update_time) > time_between_updates:
-        yield from update_news(message)
+    #if (time.time() - last_update_time) > time_between_updates:
+        #yield from update_news(message)
 
 
 
@@ -617,6 +688,7 @@ def main():
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
+    asyncio.async(yt_radio())
     try:
         loop.run_until_complete(main())
     except:

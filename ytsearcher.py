@@ -85,9 +85,34 @@ def main(search_query):
     url_end = filter_for_playlist(url_end)
     return url_end
 
+def getUpNext(yturl_end):
+    base = 'https://www.youtube.com/watch?v='
+    url = base + yturl_end
+    #print(url)
+    html = get_html_string(url)
+    note_phrase = 'Up next'
+    keyphrase = '<a href="/watch?v='
+
+    next_url = ''
+
+    found_note = False
+
+    for i in range(len(html)):
+        if html[i:i + len(note_phrase)] == note_phrase:
+            found_note = True
+        if found_note:
+            if html[i:i + len(keyphrase)] == keyphrase:
+                index = i + len(keyphrase)
+                while(html[index] != '\"'):
+                    next_url += html[index]
+                    index += 1
+                return next_url
+
+
 
 
 
 
 if __name__ == '__main__':
-    main(input("search_query: "))
+    #main(input("search_query: "))
+    print(getUpNext('YykjpeuMNEk'))
