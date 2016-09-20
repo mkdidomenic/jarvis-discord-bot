@@ -11,6 +11,7 @@ import overpwn_news
 import time
 import random
 import threading
+from concurrent.futures import ThreadPoolExecutor
 
 
 
@@ -149,16 +150,13 @@ def send_discord(channel, message):
 
 
 @asyncio.coroutine
-async def yt_radio():#m_channel):
+def yt_radio(m_channel):
     # threaded function
     global player
     global ytring
     global current_ytr_url
-    global ytr_m_channel
-    m_channel = ytr_m_channel
 
-    #print('starting thread')
-
+    print('starting thread')
     # init
     if ytring:
         rs = yield from playYoutubeURL(current_ytr_url)
@@ -167,6 +165,7 @@ async def yt_radio():#m_channel):
     while ytring:
         print('ytring:' + str(ytring))
         if player != None and (not player.is_playing()):
+            print(player)
             current_ytr_url = ytsearcher.getUpNext(current_ytr_url)
             rs = yield from playYoutubeURL(current_ytr_url)
             yield from send_discord(m_channel, rs)
@@ -239,6 +238,7 @@ def on_message(message):
         elif command == ('$quit') and message.author.name in admins:
             shouldReply = False
             hangmaning = False
+            ytring = False
             yield from client.send_message(message.channel, 'Goodbye.')
             yield from client.logout()
 
@@ -246,7 +246,7 @@ def on_message(message):
         elif command == ('$join'):
             voice = None
             if len(words) < 2:
-                replyString = "You must specify a channel"
+                words += ['General']
             for channel in message.channel.server.channels:
                 if channel.name == words[1]:
                     if channel.type == discord.ChannelType.voice:
@@ -443,8 +443,7 @@ def on_message(message):
                     current_ytr_url = url_end
                     replyString = "Radioing with search terms: " + arg_string + "\n\n"
                     #ytrloop = threading.Thread(target=yt_radio, args=(message.channel,))
-                    ytr_m_channel = message.channel
-                    asyncio.ensure_future(yt_radio())
+                    yield from asyncio.ensure_future(yt_radio(message.channel))
                     #print('bout to start thread')
 
         # play a song from the top 100 using search
@@ -688,7 +687,7 @@ def main():
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    asyncio.async(yt_radio())
+    p = ThreadPoolExecutor(2)
     try:
         loop.run_until_complete(main())
     except:
