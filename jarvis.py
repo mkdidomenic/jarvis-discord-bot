@@ -11,9 +11,8 @@ import overpwn_news
 import time
 import random
 import threading
-from concurrent.futures import ThreadPoolExecutor
 
-
+a_loop = None
 
 songCSVpath = "dragonsongs.csv"
 addressCSVpath = "addressbook.csv"
@@ -50,6 +49,8 @@ hangman_blank_char = "="
 ytring = False
 current_ytr_url = ''
 ytrloop = None
+ytrthread = None
+ytr_m_channel = None
 
 def wordArrayToString(words):
     string = ""
@@ -74,10 +75,11 @@ def parse_yturl_end(yturl):
             if yturl[i] == '=':
                 return yturl[i + 1:]
 
-
+@asyncio.coroutine
 def playYoutubeURL(yturl):
     global player
     global voice
+    global YTSTRING
     if voice != None:
         if player != None:
             player.stop()
@@ -85,8 +87,10 @@ def playYoutubeURL(yturl):
         # fix up the url if need be
         if YTSTRING not in yturl:
             complete_url = YTSTRING + yturl
+        else:
+            complete_url = yturl
 
-        player = yield from voice.create_ytdl_player(complete_url)
+        player = yield from voice.create_ytdl_player(complete_url, after=yt_radio)
         player.volume = default_volume
         player.start()
         replyString = "Playing - " + voice.channel.name + " channel is bumpin'!" + "\n"
@@ -136,7 +140,6 @@ def split_message(message, limit):
         message2 = split_message(message2, limit)
         return message1 + message2
 
-
 @asyncio.coroutine
 def send_discord(channel, message):
     '''sends the message splitting it if need be'''
@@ -148,29 +151,43 @@ def send_discord(channel, message):
         for message in messages:
             yield from client.send_message(channel, message)
 
-
-@asyncio.coroutine
-def yt_radio(m_channel):
-    # threaded function
+# after the player
+def yt_radio():
+    global client
+    global voice
     global player
-    global ytring
     global current_ytr_url
-
-    print('starting thread')
-    # init
-    if ytring:
-        rs = yield from playYoutubeURL(current_ytr_url)
-        yield from send_discord(m_channel, rs)
-    #loop
-    while ytring:
-        print('ytring:' + str(ytring))
-        if player != None and (not player.is_playing()):
-            print(player)
-            current_ytr_url = ytsearcher.getUpNext(current_ytr_url)
-            rs = yield from playYoutubeURL(current_ytr_url)
-            yield from send_discord(m_channel, rs)
-    return
-
+    global ytr_m_channel
+    global YTSTRING
+    global a_loop
+    m_channel = ytr_m_channel
+    #print('got here at least')
+    if(ytring):
+        #print('Continuing with tunes')
+        #print('1: ' + current_ytr_url)
+        current_ytr_url = ytsearcher.getUpNext(current_ytr_url)
+        #print('2: ' + current_ytr_url)
+        # fix up the url if need be
+        if YTSTRING not in current_ytr_url:
+            complete_url = YTSTRING + current_ytr_url
+        else:
+            complete_url = current_ytr_url
+        #print('compurl: ' + complete_url)
+        ptitle = ytsearcher.get_html_page_title(complete_url)
+        print('ptitle: ' + ptitle)
+        next_song = '$play ' + ptitle
+        try:
+            coroute1 = send_discord(m_channel, next_song)
+            futur1 = asyncio.run_coroutine_threadsafe(coroute1, client.loop)
+            futur1.result()
+        except Exception as e:
+            print('exception 1 ' + str(e))
+#        try:
+#            coroute2 = playYoutubeURL(current_ytr_url)
+#            futur2 = asyncio.run_coroutine_threadsafe(coroute2, a_loop)
+#            futur2.result()
+#        except Exception as e:
+#            print('exception 2 ' + str(e))
 
 @client.event
 @asyncio.coroutine
@@ -190,13 +207,8 @@ def on_message(message):
     global ytring
     global ytrloop
     global ytr_m_channel
+    global ytrthread
     #check if its a command
-    if False:
-        print(time.time())
-        print('ytring: ' + str(ytring))
-        if ytrloop != None: print('ytrloop: ' + str(ytrloop.is_alive()))
-        if player != None: print('player: ' + str(player.is_playing()))
-        print()
 
     if message.content.startswith("$"):
         # get the command and message
@@ -208,8 +220,9 @@ def on_message(message):
         shouldReply = True
         #simple response
         if command == ('$greet'):
-            replyString = "Hello! I am Jarvis."
-
+            replyString = "Hello! I am Jarvis.\n"
+            if player != None: replyString += str(player)
+            else: replyString += 'None'
         elif command == ('$help'):
             replyString = "All commands are preceded by a $, for example, $greet\n"
             replyString += "\n-greet- gives a nice greeting"
@@ -233,7 +246,6 @@ def on_message(message):
             replyString += "\n-djlist - lists the songs on the current stations"
             replyString += "\n-djset [charts station URL]- sets the DJ station"
             replyString += "\n-stations - lists the saved stations"
-
         #quit the stuff
         elif command == ('$quit') and message.author.name in admins:
             shouldReply = False
@@ -241,7 +253,6 @@ def on_message(message):
             ytring = False
             yield from client.send_message(message.channel, 'Goodbye.')
             yield from client.logout()
-
         #join a voice channel
         elif command == ('$join'):
             voice = None
@@ -257,8 +268,6 @@ def on_message(message):
                         replyString += " because it is a text channel, not a voice channel."
             if replyString == "":
                 replyString = "That channel does not exist."
-
-
         #switching servers
         elif command == ('$invite'):
             if len(words) < 2:
@@ -269,7 +278,6 @@ def on_message(message):
                 inv = yield from client.get_invite(target)
                 yield from client.accept_invite(inv)
                 replyString = "Joining " + target
-
         elif command == ("$leave") and message.author.name in admins:
             if len(words) < 2:
                 target = message.server.name
@@ -292,20 +300,6 @@ def on_message(message):
                     shouldReply = False
             else:
                 replyString = "I am not in that server."
-
-
-
-        # play audio
-        elif command == ('$play'):
-
-            if len(words) < 2:
-                replyString = "You must specify a youtube URL."
-                replyString += "\n Only including the part after the equals sign:"
-                replyString += "\n" + YTSTRING
-            else:
-                yturl = words[1]
-                replyString = yield from playYoutubeURL(yturl)
-
         # pause and resume the stuff
         elif command == ('$pause'):
             player.pause()
@@ -313,7 +307,6 @@ def on_message(message):
         elif command == ('$resume'):
             player.resume()
             replyString = "Resumed the tunes."
-
         # volume adjustment
         elif command == ('$volume'):
             if len(words) < 2:
@@ -333,7 +326,6 @@ def on_message(message):
                     except ValueError:
                         wordstring = wordArrayToString(words[1:])
                         replyString = "\"" + wordstring + "\" is not a number between 0 and 200."
-
         # mute the audio
         elif command == ('$mute'):
             if player == None:
@@ -342,7 +334,6 @@ def on_message(message):
                 vol = 0
                 player.volume = vol
                 replyString = "I have adjusted the volume to " + str(vol) + "%."
-
         # zip it
         elif command == ('$silence'):
             if player != None:
@@ -351,84 +342,15 @@ def on_message(message):
                 replyString = "Sometimes quiet is violent. |-/"
             else:
                 replyString = "I am not playing anything."
-
-
-        # save a youtube url as an alias
-        elif command == ('$save'):
-            if len(words) < 3:
-                replyString = "You need to specify an alias and a URL"
-            else:
-                alias = wordArrayToString(words[2:])
-                url = words[1]
-                # get existing data
-                songFile = open(songCSVpath, "r")
-                read = csv.reader(songFile)
-                data = []
-                for row in read:
-                    data += [row]
-
-                foundAlias = False
-                for row in data:
-                    if row[0] == alias:
-                        foundAlias = True
-                if not foundAlias:
-                    data += [[alias, url]]
-                    songFile.close()
-                    # write new data
-                    songFile = open(songCSVpath, "w")
-                    write = csv.writer(songFile, lineterminator='\n')
-                    for row in data:
-                        write.writerow(row)
-                    songFile.close()
-                    replyString = "I have saved url [" + url + "] as \"" + alias + "\""
-                else:
-                    replyString = "That alias is already in use."
-
-        # load a youtube audio track from an presaved alias
-        # triggers play with its own message
-        elif command == ("$load"):
-            if len(words) < 2:
-                replyString = "You need to specify an alias."
-            else:
-                alias = wordArrayToString(words[1:])
-                # get existing data
-                songFile = open(songCSVpath, "r")
-                read = csv.reader(songFile)
-                data = []
-                for row in read:
-                    data += [row]
-                foundAlias = False
-                for row in data:
-                    if row[0] == alias:
-                        lalias = row[0]
-                        lurl = row[1]
-                        foundAlias = True
-                if not foundAlias:
-                    replyString = "That alias does not exist in records."
-                else:
-                    replyString = "\nAlias: " + lalias
-                    replyString += "\nYoutube URL for playing: " + lurl + "\n\n"
-                    replyString += yield from playYoutubeURL(lurl)
-
-
-        # print the saved aliases
-        elif command == ("$songs"):
-            songFile = open(songCSVpath, "r")
-            read = csv.reader(songFile)
-            string = "Listing saved songs:\n\n"
-            for row in read:
-                string += row[0] + "\n"
-            replyString = string
-
         # search a song on youtube, plays the top results
-        elif command == ("$search"):
+        elif command == ("$play"):
             args = words[1:]
             arg_string = wordArrayToString(args)
             url_end = ytsearcher.main(arg_string)
             replyString = "Search terms: " + arg_string + "\n\n"
             replyString += yield from playYoutubeURL(url_end)
-
-        elif command == ("$ytr"):
+        # radio
+        elif command == ("$radio"):
             if ytring:
                 replyString = "Stopping radioing" + "\n\n"
                 ytring = False
@@ -441,11 +363,10 @@ def on_message(message):
                     arg_string = wordArrayToString(args)
                     url_end = ytsearcher.main(arg_string)
                     current_ytr_url = url_end
-                    replyString = "Radioing with search terms: " + arg_string + "\n\n"
-                    #ytrloop = threading.Thread(target=yt_radio, args=(message.channel,))
-                    yield from asyncio.ensure_future(yt_radio(message.channel))
+                    replyString = "Starting radio with search terms: " + arg_string + "\n\n"
+                    ytr_m_channel = message.channel
+                    replyString += yield from playYoutubeURL(current_ytr_url)
                     #print('bout to start thread')
-
         # play a song from the top 100 using search
         elif command == ("$dj"):
             sURL = getTop100.url_start() + station
@@ -460,13 +381,11 @@ def on_message(message):
             replyString = "Station: " + station + "\n"
             replyString += "Search terms: " + st + "\n\n"
             replyString += yield from playYoutubeURL(url_end)
-
         #list top 100 songs
         elif command == ("$djlist"):
             sURL = getTop100.url_start() + station
             replyString = "Station: " + station + ":\n"
             replyString += getTop100.list_songs(sURL)
-
         #station list
         elif command == ("$stations"):
             replyString = "Current station: " + station + "\n"
@@ -476,7 +395,6 @@ def on_message(message):
             replyString += "Top summer songs: \"summer-songs\"\n"
             replyString += "Top demanded songs: \"on-demand-songs\"\n"
             replyString += "Top twitter songs: \"twitter-top-tracks\"\n"
-
         # set dj station
         elif command == ("$djset"):
             if len(words) < 2:
@@ -484,27 +402,10 @@ def on_message(message):
             else:
                 station = words[1]
                 replyString = "Setting station to \"" + station + "\"."
-
-
-        # load a file
-        elif command == "$playfile":
-            print("Playing file not implemented")
-            if False:
-                if voice != None:
-                    playfilename = "file.mp4"
-                    player = yield from voice.create_ffmpeg_player(playfilename)
-                    player.volume = default_volume
-                    player.start()
-                    replyString = "Playing: " + voice.channel.name + " - file from pc."
-                else:
-                    replyString = "No voice channel"
-
         # updates news
         elif command == "$updatenews":
             shouldReply = False
             yield from update_news(message)
-
-
         # texting
         elif command == ("$text"):
             if not (len(m) > 2):
@@ -528,7 +429,6 @@ def on_message(message):
                     smsString += " -JARVIS"
                     sendSMSMessage("+1" + number, smsString)
                     replyString = "Texting: " + name + " (" + number + ")"
-
         # show the texting contacts
         elif command == ("$contacts"):
             addressFile = open(addressCSVpath, "r")
@@ -537,7 +437,6 @@ def on_message(message):
             for row in read:
                 string += row[0] + ": " + row[1] + "\n"
             replyString = string
-
         # just for playing games
         elif command == ("$hangman"):
             if hangmaning:
@@ -550,9 +449,6 @@ def on_message(message):
                 tries_left = 7
                 hangman_guessed_chars = ""
                 replyString = "Starting hangman! You have " + str(tries_left) + " tries."
-
-
-
         # not one of the above commands
         else:
             replyString = "\"" + command + "\" is not a command."
@@ -686,11 +582,10 @@ def main():
 
 
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    p = ThreadPoolExecutor(2)
+    a_loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(main())
+        a_loop.run_until_complete(main())
     except:
-        loop.run_until_complete(client.logout())
+        a_loop.run_until_complete(client.logout())
     finally:
-        loop.close()
+        a_loop.close()
