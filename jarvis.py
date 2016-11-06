@@ -18,8 +18,6 @@ songCSVpath = "dragonsongs.csv"
 addressCSVpath = "addressbook.csv"
 news_channel_name = "news"
 
-discord_username = "dragonitecatcher5556@gmail.com"
-discord_password = "dratini17"
 discord_token = "MjE0ODg5NzE2NzMzMDUwODgx.CpPjMw\
 .ZdFLRcXEGA2ILghHvqJ5HVU7U0I"
 
